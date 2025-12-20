@@ -1,0 +1,155 @@
+name: build-olinux
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: alpine:latest
+    steps:
+      - name: Install toolchain
+        run: |
+          apk add --no-cache \
+            musl-dev clang llvm lld elfutils-dev ncurses-dev \
+            bearssl bearssl-dev bearssl-static \
+            git make zstd xz jq patch diffutils wget \
+            byacc flex linux-headers
+          
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          
+      - name: Configure git
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global init.defaultBranch master
+          git config --global user.email "anto@xplshn.com.ar"
+          git config --global user.name "xplshn"
+
+      - name: Fetch latest stable kernel version
+        id: kernel
+        run: |
+          VERSION=$(wget -qO- https://www.kernel.org/releases.json | jq -r '.latest_stable.version')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "major=${VERSION%%.*}" >> $GITHUB_OUTPUT
+          
+      - name: Download and extract kernel
+        run: |
+          MAJOR=${{ steps.kernel.outputs.major }}
+          VERSION=${{ steps.kernel.outputs.version }}
+          URL="https://cdn.kernel.org/pub/linux/kernel/v${MAJOR}.x/linux-${VERSION}.tar.xz"
+          wget -q "$URL"
+          tar -xf "linux-${VERSION}.tar.xz"
+          
+      - name: Clone oasis linux fork and get base version
+        run: |
+          git clone --depth 1 https://github.com/oasislinux/linux.git oasis-linux
+          cd oasis-linux
+          OASIS_VERSION=$(make -s kernelversion 2>/dev/null || echo "unknown")
+          echo "Oasis is based on kernel: $OASIS_VERSION"
+          echo "oasis_version=$OASIS_VERSION" >> $GITHUB_ENV
+          rm -rf .git
+          cd ..
+          
+      - name: Download oasis base kernel
+        run: |
+          OASIS_VERSION="${{ env.oasis_version }}"
+          if [ "$OASIS_VERSION" = "unknown" ]; then
+            echo "Could not determine oasis base version, using latest"
+            exit 1
+          fi
+          MAJOR="${OASIS_VERSION%%.*}"
+          URL="https://cdn.kernel.org/pub/linux/kernel/v${MAJOR}.x/linux-${OASIS_VERSION}.tar.xz"
+          wget -q "$URL" || {
+            echo "Failed to download base kernel, trying without patch version"
+            MINOR_VERSION="${OASIS_VERSION%.*}"
+            URL="https://cdn.kernel.org/pub/linux/kernel/v${MAJOR}.x/linux-${MINOR_VERSION}.tar.xz"
+            wget -q "$URL"
+            OASIS_VERSION="$MINOR_VERSION"
+          }
+          tar -xf "linux-${OASIS_VERSION}.tar.xz"
+          mv "linux-${OASIS_VERSION}" oasis-base
+          
+      - name: Generate oasis patches against base
+        run: |
+          diff -ruN \
+            --exclude=.git \
+            oasis-base \
+            oasis-linux \
+            > oasis-changes.patch || true
+          
+          if [ ! -s oasis-changes.patch ]; then
+            echo "No differences found between oasis and base kernel"
+            exit 1
+          fi
+          
+          echo "Oasis patch size: $(wc -l < oasis-changes.patch) lines"
+          head -100 oasis-changes.patch
+          
+      - name: Setup linox branch
+        run: |
+          git fetch origin linox || true
+          if git show-ref --verify --quiet refs/remotes/origin/linox; then
+            git checkout -B linox origin/linox
+            git rm -rf . || true
+          else
+            git checkout --orphan linox
+            git rm -rf . || true
+          fi
+          
+      - name: Import kernel
+        run: |
+          VERSION=${{ steps.kernel.outputs.version }}
+          cp -r "linux-${VERSION}"/* .
+          # UPDATED: Removes temporary dirs AND all tarballs (*.tar.xz) to prevent Large File Error
+          rm -rf "linux-${VERSION}" oasis-linux oasis-base *.tar.xz
+          git add .
+          git commit -m "Import Linux ${VERSION}" || echo "No changes"
+          
+      - name: Apply oasis patches
+        run: |
+          if [ -s oasis-changes.patch ]; then
+            echo "Applying oasis patches..."
+            patch -p1 --forward --no-backup-if-mismatch < oasis-changes.patch || {
+              echo "Some patches failed to apply cleanly"
+            }
+            
+            ## Clean up reject files
+            ##find . -name "*.rej" -type f -delete
+            
+            git add -A
+            git diff --cached --stat
+            git commit -m "Apply oasis build-system patches (from v${{ env.oasis_version }})" || echo "No changes to commit"
+          else
+            echo "No oasis patches to apply"
+            exit 1
+          fi
+          
+      - name: Build test
+        env:
+          CC: clang
+          LD: ld.lld
+          AR: llvm-ar
+          NM: llvm-nm
+          OBJCOPY: llvm-objcopy
+          OBJDUMP: llvm-objdump
+          STRIP: llvm-strip
+          LEX: lex
+          YACC: yacc
+          HOSTCFLAGS: "-I/usr/include"
+        run: |
+          make mrproper
+          make tinyconfig
+          make -j$(nproc)
+          
+      - name: Tag and push
+        run: |
+          VERSION=$(make kernelversion)
+          git tag -f "linox-${VERSION}"
+          git push -f origin linox
+          git push origin --tags -f
