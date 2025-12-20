@@ -7,6 +7,13 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        branch:
+          - name: linox
+            use_bearssl: false
+          - name: linox-bssl
+            use_bearssl: true
     container:
       image: alpine:latest
     steps:
@@ -91,14 +98,15 @@ jobs:
           echo "Oasis patch size: $(wc -l < oasis-changes.patch) lines"
           head -100 oasis-changes.patch
           
-      - name: Setup linox branch
+      - name: Setup branch
         run: |
-          git fetch origin linox || true
-          if git show-ref --verify --quiet refs/remotes/origin/linox; then
-            git checkout -B linox origin/linox
+          BRANCH="${{ matrix.branch.name }}"
+          git fetch origin "$BRANCH" || true
+          if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH"; then
+            git checkout -B "$BRANCH" "origin/$BRANCH"
             git rm -rf . || true
           else
-            git checkout --orphan linox
+            git checkout --orphan "$BRANCH"
             git rm -rf . || true
           fi
           
@@ -106,10 +114,34 @@ jobs:
         run: |
           VERSION=${{ steps.kernel.outputs.version }}
           cp -r "linux-${VERSION}"/* .
-          # UPDATED: Removes temporary dirs AND all tarballs (*.tar.xz) to prevent Large File Error
           rm -rf "linux-${VERSION}" oasis-linux oasis-base *.tar.xz
           git add .
           git commit -m "Import Linux ${VERSION}" || echo "No changes"
+          
+      - name: Filter bearssl patches for linox branch
+        if: ${{ !matrix.branch.use_bearssl }}
+        run: |
+          # Remove bearssl-specific patches from the patch file
+          grep -v "^diff.*certs/extract-cert\.c" oasis-changes.patch > filtered.patch.tmp || true
+          grep -v "^diff.*certs/Makefile" filtered.patch.tmp > filtered.patch || true
+          
+          # Split patch into individual files and filter out bearssl patches
+          awk '/^diff/ {if (f) close(f); f="patch_"++i".diff"} f {print > f}' oasis-changes.patch
+          
+          # Remove bearssl patch files
+          rm -f patch_*.diff
+          
+          # Recreate filtered patch
+          awk '
+            /^diff.*certs\/extract-cert\.c/ { skip=1; next }
+            /^diff.*certs\/Makefile/ { skip=1; next }
+            /^diff/ { skip=0 }
+            !skip { print }
+          ' oasis-changes.patch > oasis-filtered.patch
+          
+          mv oasis-filtered.patch oasis-changes.patch
+          
+          echo "Filtered patch size: $(wc -l < oasis-changes.patch) lines"
           
       - name: Apply oasis patches
         run: |
@@ -119,8 +151,8 @@ jobs:
               echo "Some patches failed to apply cleanly"
             }
             
-            ## Clean up reject files
-            ##find . -name "*.rej" -type f -delete
+            # Clean up reject files
+            find . -name "*.rej" -type f -delete
             
             git add -A
             git diff --cached --stat
@@ -150,6 +182,7 @@ jobs:
       - name: Tag and push
         run: |
           VERSION=$(make kernelversion)
-          git tag -f "linox-${VERSION}"
-          git push -f origin linox
+          BRANCH="${{ matrix.branch.name }}"
+          git tag -f "${BRANCH}-${VERSION}"
+          git push -f origin "$BRANCH"
           git push origin --tags -f
