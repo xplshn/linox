@@ -151,8 +151,9 @@ jobs:
               echo "Some patches failed to apply cleanly"
             }
             
-            # Clean up reject files
+            # Clean up rejects and our patch
             find . -name "*.rej" -type f -delete
+            rm ./oasis-changes.patch
             
             git add -A
             git diff --cached --stat
