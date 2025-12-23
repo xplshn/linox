@@ -152,8 +152,8 @@ jobs:
             }
             
             # Clean up rejects and our patch
-            find . -name "*.rej" -type f -delete
-            rm *.patch *.patch.temp *.patch.tmp
+            find . -name "*.rej" -type f -delete || true
+            rm *.patch *.patch.tmp || true
             
             git add -A
             git diff --cached --stat
