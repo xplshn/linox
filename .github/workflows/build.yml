@@ -153,7 +153,7 @@ jobs:
             
             # Clean up rejects and our patch
             find . -name "*.rej" -type f -delete
-            rm ./oasis-changes.patch
+            rm *.patch *.patch.temp *.patch.tmp
             
             git add -A
             git diff --cached --stat
