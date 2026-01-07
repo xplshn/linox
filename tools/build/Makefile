@@ -30,7 +30,7 @@ TMP_O := $(if $(OUTPUT),$(OUTPUT)feature/,./)
 
 clean:
 	$(call QUIET_CLEAN, fixdep)
-	$(Q)find $(or $(OUTPUT),.) '(' -name '*.o' -o -name '\.*.cmd' -o -name '\.*.d' ')' -exec $(RM) {} +
+	$(Q)find $(or $(OUTPUT),.) -name '*.o' -delete -o -name '\.*.cmd' -delete -o -name '\.*.d' -delete
 	$(Q)rm -f $(OUTPUT)fixdep
 	$(call QUIET_CLEAN, feature-detect)
 ifneq ($(wildcard $(TMP_O)),)
