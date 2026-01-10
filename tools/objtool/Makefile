@@ -18,8 +18,8 @@ LIBSUBCMD = $(LIBSUBCMD_OUTPUT)/libsubcmd.a
 OBJTOOL    := $(OUTPUT)objtool
 OBJTOOL_IN := $(OBJTOOL)-in.o
 
-LIBELF_FLAGS := $(shell $(HOSTPKG_CONFIG) libelf --cflags 2>/dev/null)
-LIBELF_LIBS  := $(shell $(HOSTPKG_CONFIG) libelf --libs 2>/dev/null || echo -lelf)
+LIBELF_FLAGS :=
+LIBELF_LIBS  := -l elf
 
 all: $(OBJTOOL)
 
@@ -85,8 +85,8 @@ $(LIBSUBCMD)-clean:
 
 clean: $(LIBSUBCMD)-clean
 	$(call QUIET_CLEAN, objtool) $(RM) $(OBJTOOL)
-	$(Q)find $(OUTPUT) -name '*.o' -delete -o -name '\.*.cmd' -delete -o -name '\.*.d' -delete
-	$(Q)$(RM) $(OUTPUT)arch/x86/lib/inat-tables.c $(OUTPUT)fixdep
+	$(Q)find $(if $(OUTPUT),$(OUTPUT),.) '(' -name '*.o' -o -name '\.*.cmd' -o -name '\.*.d' ')' -exec $(RM) {} +
+	$(Q)$(RM) $(OUTPUT)arch/x86/lib/inat-tables.c $(OUTPUT)fixdep $(LIBSUBCMD)
 
 FORCE:
 
