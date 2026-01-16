@@ -53,9 +53,7 @@ $(OUTPUT)spidev_fdx: $(SPIDEV_FDX_IN)
 clean:
 	rm -f $(ALL_PROGRAMS)
 	rm -rf $(OUTPUT)include/
-	find $(or $(OUTPUT),.) -name '*.o' -delete
-	find $(or $(OUTPUT),.) -name '\.*.o.d' -delete
-	find $(or $(OUTPUT),.) -name '\.*.o.cmd' -delete
+	find $(or $(OUTPUT),.) '(' -name '*.o' -o -name '\.*.o.d' -o -name '\.*.o.cmd' ')' -exec $(RM) {} +
 
 install: $(ALL_PROGRAMS)
 	install -d -m 755 $(DESTDIR)$(bindir);		\
