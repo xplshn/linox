@@ -163,6 +163,7 @@ static struct errormap errmap[] = {
 	{"cannot remove root", EPERM},
 	{"file too big", EFBIG},
 	{"venti i/o error", EIO},
+	{"does not exist", ENOENT},
 	/* these are not errors */
 	{"u9fs rhostsauth: no authentication required", 0},
 	{"u9fs authnone: no authentication required", 0},
@@ -216,7 +217,6 @@ int p9_errstr2errno(char *errstr, int len)
 
 	if (errno == 0) {
 		/* TODO: if error isn't found, add it dynamically */
-		errstr[len] = 0;
 		pr_err("%s: server reported unknown error %s\n",
 		       __func__, errstr);
 		errno = ESERVERFAULT;
