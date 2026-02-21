@@ -166,7 +166,7 @@ help:
 common-objs	:= confdata.o expr.o lexer.lex.o menu.o parser.tab.o \
 		   preprocess.o symbol.o util.o
 
-$(obj)/lexer.lex.o: $(obj)/parser.tab.c
+$(obj)/lexer.lex.o: $(obj)/parser.tab.h
 HOSTCFLAGS_lexer.lex.o	:= -I $(src)
 HOSTCFLAGS_parser.tab.o	:= -I $(src)
 
