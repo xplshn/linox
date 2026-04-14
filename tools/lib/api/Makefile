@@ -87,7 +87,7 @@ define do_install
 	if [ ! -d '$2' ]; then             \
 		$(INSTALL) -d -m 755 '$2'; \
 	fi;                                \
-	$(INSTALL) $(if $3,-m $3,) $1 '$2'
+	$(INSTALL) $1 $(if $3,-m $3,) '$2'
 endef
 
 install_lib: $(LIBFILE)
@@ -122,7 +122,7 @@ install: install_lib install_headers
 
 clean:
 	$(call QUIET_CLEAN, libapi) $(RM) $(LIBFILE); \
-	find $(or $(OUTPUT),.) '(' -name \*.o -o -name \*.o.cmd -o -name \*.o.d ')' -exec $(RM) {} +
+	find $(or $(OUTPUT),.) -name \*.o -or -name \*.o.cmd -or -name \*.o.d | xargs $(RM)
 
 FORCE:
 
