@@ -97,13 +97,6 @@ struct menu *current_menu, *current_entry, *current_choice;
 %type <string> assign_val
 %type <flavor> assign_op
 
-%destructor {
-	fprintf(stderr, "%s:%d: missing end statement for this entry\n",
-		$$->filename, $$->lineno);
-	if (current_menu == $$)
-		menu_end_menu();
-} if_entry menu_entry choice_entry
-
 %%
 input: mainmenu_stmt stmt_list | stmt_list;
 
