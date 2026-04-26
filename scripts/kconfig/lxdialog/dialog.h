@@ -16,7 +16,7 @@
 #ifdef __sun__
 #define CURS_MACROS
 #endif
-#include <curses.h>
+#include <ncurses.h>
 
 #define TR(params) _tracef params
 
