@@ -53,7 +53,7 @@ $(OUTPUT)intel-speed-select: $(ISST_IN)
 clean:
 	rm -f $(ALL_PROGRAMS)
 	rm -rf $(OUTPUT)include/linux/isst_if.h
-	find $(or $(OUTPUT),.) '(' -name '*.o' -o -name '\.*.d' ')' -exec $(RM) {} +
+	find $(or $(OUTPUT),.) -name '*.o' -delete -o -name '\.*.d' -delete
 
 install: $(ALL_PROGRAMS)
 	install -d -m 755 $(DESTDIR)$(bindir);		\
