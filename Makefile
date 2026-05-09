@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0
 VERSION = 7
 PATCHLEVEL = 0
-SUBLEVEL = 4
+SUBLEVEL = 5
 EXTRAVERSION =
 NAME = Baby Opossum Posse
 
@@ -539,8 +539,8 @@ CLIPPY_DRIVER	= clippy-driver
 BINDGEN		= bindgen
 PAHOLE		= pahole
 RESOLVE_BTFIDS	= $(objtree)/tools/bpf/resolve_btfids/resolve_btfids
-LEX		= lex
-YACC		= yacc
+LEX		= flex
+YACC		= bison
 AWK		= awk
 INSTALLKERNEL  := installkernel
 PERL		= perl
