@@ -849,9 +849,16 @@ static int elf_update_symbol(struct elf *elf, struct section *symtab,
 		}
 	}
 
-	if (!gelf_update_symshndx(symtab_data, shndx_data, idx, &sym->sym, shndx)) {
-		ERROR_ELF("gelf_update_symshndx");
-		return -1;
+	if (shndx_data) {
+		if (!gelf_update_symshndx(symtab_data, shndx_data, idx, &sym->sym, shndx)) {
+			ERROR_ELF("gelf_update_symshndx");
+			return -1;
+		}
+	} else {
+		if (!gelf_update_sym(symtab_data, idx, &sym->sym)) {
+			ERROR_ELF("gelf_update_sym");
+			return -1;
+		}
 	}
 
 	return 0;
