@@ -18,7 +18,20 @@
 #include <stdbool.h>
 #include <string.h>
 #include <err.h>
-#include <bearssl.h>
+#include <openssl/bio.h>
+#include <openssl/pem.h>
+#include <openssl/err.h>
+#if OPENSSL_VERSION_MAJOR >= 3
+# define USE_PKCS11_PROVIDER
+# include <openssl/provider.h>
+# include <openssl/store.h>
+#else
+# if !defined(OPENSSL_NO_ENGINE) && !defined(OPENSSL_NO_DEPRECATED_3_0)
+#  define USE_PKCS11_ENGINE
+#  include <openssl/engine.h>
+# endif
+#endif
+#include "ssl-common.h"
 
 #define PKEY_ID_PKCS7 2
 
@@ -116,6 +129,10 @@ int main(int argc, char **argv)
 	char *cert_src;
 	char *verbose_env;
 
+	OpenSSL_add_all_algorithms();
+	ERR_load_crypto_strings();
+	ERR_clear_error();
+
 	verbose_env = getenv("KBUILD_VERBOSE");
 	if (verbose_env && strchr(verbose_env, '1'))
 		verbose = true;
@@ -133,45 +150,37 @@ int main(int argc, char **argv)
 	if (!cert_src[0]) {
 		/* Invoked with no input; create empty file */
 		FILE *f = fopen(cert_dst, "wb");
-		if (!f)
-			err(1, "%s", cert_dst);
+		ERR(!f, "%s", cert_dst);
 		fclose(f);
 		exit(0);
 	} else if (!strncmp(cert_src, "pkcs11:", 7)) {
-		errx(1, "PKCS#11 certificates are not supported");
+		X509 *cert = load_cert_pkcs11(cert_src);
+
+		ERR(!cert, "load_cert_pkcs11 failed");
+		write_cert(cert);
 	} else {
-		FILE *src, *dst;
-		br_pem_decoder_context ctx;
-		char buf[8192], *pos;
-		size_t len = 0, n;
+		BIO *b;
+		X509 *x509;
 
-		src = fopen(cert_src, "rb");
-		if (!src)
-			err(1, "open %s", cert_src);
-		dst = fopen(cert_dst, "wb");
-		if (!dst)
-			err(1, "open %s", cert_dst);
+		b = BIO_new_file(cert_src, "rb");
+		ERR(!b, "%s", cert_src);
 
-		br_pem_decoder_init(&ctx);
-		br_pem_decoder_setdest(&ctx, write_cert, dst);
-		for (;;) {
-			if (len == 0) {
-				if (feof(src))
+		while (1) {
+			x509 = PEM_read_bio_X509(b, NULL, NULL, NULL);
+			if (wb && !x509) {
+				unsigned long err = ERR_peek_last_error();
+				if (ERR_GET_LIB(err) == ERR_LIB_PEM &&
+				    ERR_GET_REASON(err) == PEM_R_NO_START_LINE) {
+					ERR_clear_error();
 					break;
-				len = fread(buf, 1, sizeof(buf), src);
-				if (ferror(src))
-					err(1, "read %s", cert_src);
-				pos = buf;
+				}
 			}
-			n = br_pem_decoder_push(&ctx, pos, len);
-			pos += n;
-			len -= n;
-			if (br_pem_decoder_event(&ctx) == BR_PEM_ERROR)
-				errx(1, "PEM decode failure");
+			ERR(!x509, "%s", cert_src);
+			write_cert(x509);
 		}
-		if (fflush(dst) != 0)
-			err(1, "flush %s", cert_dst);
 	}
+
+	BIO_free(wb);
 
 	return 0;
 }
