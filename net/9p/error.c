@@ -163,6 +163,7 @@ static struct errormap errmap[] = {
 	{"cannot remove root", EPERM},
 	{"file too big", EFBIG},
 	{"venti i/o error", EIO},
+	{"does not exist", ENOENT},
 	/* these are not errors */
 	{"u9fs rhostsauth: no authentication required", 0},
 	{"u9fs authnone: no authentication required", 0},
@@ -203,6 +204,21 @@ int p9_errstr2errno(char *errstr, int len)
 	int errno;
 	struct errormap *c;
 	u32 hash;
+	char *p;
+
+	/* strip possible quoted filename */
+	errstr[len] = 0;
+	p = errstr;
+	if (*p == '\'') {
+		while (*++p) {
+			if (*p == '\'' && *++p != '\'')
+				break;
+		}
+		if (*p == ' ')
+			p++;
+	}
+	len -= p - errstr;
+	errstr = p;
 
 	errno = 0;
 	c = NULL;
@@ -216,7 +232,6 @@ int p9_errstr2errno(char *errstr, int len)
 
 	if (errno == 0) {
 		/* TODO: if error isn't found, add it dynamically */
-		errstr[len] = 0;
 		pr_err("%s: server reported unknown error %s\n",
 		       __func__, errstr);
 		errno = ESERVERFAULT;
